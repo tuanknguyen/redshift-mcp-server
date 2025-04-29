@@ -30,13 +30,16 @@ To add this MCP server to your Amazon Q or Claude, add the following to your MCP
 {
   "mcpServers": {
     "redshift": {
-        "command": "uvx",
-        "args": ["tuankn.redshift-mcp-server@latest"],
-        "env": {
-          "FASTMCP_LOG_LEVEL": "ERROR"
-        },
-        "disabled": false,
-        "autoApprove": []
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--with", "<path-to-redshift-mcp-server>", "redshift-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "disabled": false,
+      "autoApprove": []
     }
   }
 }
@@ -71,23 +74,6 @@ $env:REDSHIFT_PORT = "5439"
 $env:REDSHIFT_DATABASE = "<your-database-name>"
 $env:REDSHIFT_USER = "<your-username>"
 $env:REDSHIFT_PASSWORD = "<your-password>"
-```
-
-For development, you can create a `.env` file in the project root (but never commit it to Git):
-
-```bash
-REDSHIFT_HOST=<your-redshift-host>
-REDSHIFT_PORT=5439
-REDSHIFT_DATABASE=<your-database-name>
-REDSHIFT_USER=<your-username>
-REDSHIFT_PASSWORD=<your-password>
-FASTMCP_LOG_LEVEL=INFO
-```
-
-Then add `.env` to your `.gitignore` file:
-
-```bash
-echo ".env" >> .gitignore
 ```
 
 ## Development
@@ -133,23 +119,6 @@ Optional environment variables:
 export FASTMCP_LOG_LEVEL=INFO  # Set log level (DEBUG, INFO, WARNING, ERROR)
 ```
 
-## Running the Server
-
-### CLI Usage
-
-Start the MCP server:
-
-```bash
-# Using the entry point
-redshift-mcp-server
-
-# Using Python module
-python -m redshift_mcp_server
-
-# With SSE transport (for web interfaces)
-redshift-mcp-server --sse --port 8888
-```
-
 ### Development Mode
 
 For development and testing with the MCP Inspector:
@@ -157,16 +126,6 @@ For development and testing with the MCP Inspector:
 ```bash
 mcp dev redshift-mcp-server
 ```
-
-### Claude Desktop Integration
-
-Install the server in Claude Desktop:
-
-```bash
-# Using MCP CLI
-mcp install redshift-mcp-server --name "Redshift Explorer"
-```
-
 ## Available Tools
 
 - `run_query(query: str)` - Execute a SQL query against Redshift
@@ -192,42 +151,3 @@ python test_connection.py
 - Always include appropriate WHERE clauses to limit result sets
 - Use column names explicitly instead of SELECT * for better performance
 - Consider adding LIMIT clauses to prevent returning too many rows
-
-## Example Usage
-
-### Run a Query
-
-```python
-from mcp.client import MCPClient
-
-async with MCPClient("path/to/redshift-mcp-server") as client:
-    result = await client.tool.run_query(query="SELECT * FROM schema_name.table_name LIMIT 10")
-    for row in result:
-        print(row)
-```
-
-### List Schemas
-
-```python
-from mcp.client import MCPClient
-
-async with MCPClient("path/to/redshift-mcp-server") as client:
-    schemas = await client.tool.list_schemas()
-    for schema in schemas:
-        print(f"Schema: {schema['schema_name']}, Owner: {schema['schema_owner']}")
-```
-
-### Get Tables in a Schema
-
-```python
-from mcp.client import MCPClient
-
-async with MCPClient("path/to/redshift-mcp-server") as client:
-    tables = await client.tool.list_tables_in_schema(schema_name="public")
-    for table in tables:
-        print(f"{table['table_type']}: {table['table_name']}")
-```
-
-## License
-
-MIT
