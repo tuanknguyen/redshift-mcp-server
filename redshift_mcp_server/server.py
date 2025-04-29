@@ -4,11 +4,9 @@
 import os
 import sys
 import argparse
-import asyncio
 import logging
 import time
-from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 
 import psycopg2
@@ -38,7 +36,7 @@ from pydantic import Field
 
 # Setup logging
 logger = logging.getLogger("redshift_mcp_server")
-log_level = os.environ.get('FASTMCP_LOG_LEVEL', 'INFO')
+log_level = os.environ.get('FASTMCP_LOG_LEVEL', 'DEBUG')
 logging.basicConfig(
     level=getattr(logging, log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -46,8 +44,8 @@ logging.basicConfig(
 )
 
 
-@asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncIterator[dict]:
+@contextmanager
+def app_lifespan(server: FastMCP) -> dict:
     """Manage Redshift connection configuration."""
     # Get connection parameters from environment variables
     host = os.environ.get("REDSHIFT_HOST")
@@ -119,11 +117,11 @@ mcp = FastMCP(
 
 
 # Helper function to execute queries safely
-async def execute_query(ctx: Context, query: str) -> QueryResult:
+def execute_query(ctx: Context, query: str) -> QueryResult:
     """Execute a SQL query and return results as a QueryResult object."""
     if not query or not query.strip():
         error_msg = "Empty query provided"
-        await ctx.error(error_msg)
+        ctx.error(error_msg)
         raise ValueError(error_msg)
         
     try:
@@ -176,7 +174,7 @@ async def execute_query(ctx: Context, query: str) -> QueryResult:
                     
                     error_msg = f"Query execution failed: {error_detail}"
                     logger.error(f"Database error: {error_detail}")
-                    await ctx.error(error_msg)
+                    ctx.error(error_msg)
                     
                     # Preserve the original error type in the exception message
                     raise ValueError(f"{e.__class__.__name__}: {error_detail}")
@@ -188,13 +186,13 @@ async def execute_query(ctx: Context, query: str) -> QueryResult:
     except Exception as e:
         if not isinstance(e, ValueError):  # Don't double-wrap ValueError exceptions
             error_msg = f"Error during query execution: {str(e)}"
-            await ctx.error(error_msg)
+            ctx.error(error_msg)
             raise ValueError(error_msg)
         raise
 
 
 @mcp.tool()
-async def run_query(
+def run_query(
     ctx: Context,
     query: str = Field(description="The SQL query to execute"),
 ) -> List[Dict[str, Any]]:
@@ -228,12 +226,12 @@ async def run_query(
     Returns:
         Results of the query as a list of dictionaries
     """
-    result = await execute_query(ctx, query)
+    result = execute_query(ctx, query)
     return result.rows
 
 
 @mcp.tool()
-async def explain_query(
+def explain_query(
     ctx: Context,
     query: str = Field(description="The SQL query to explain"),
 ) -> List[Dict[str, Any]]:
@@ -270,12 +268,12 @@ async def explain_query(
         Query execution plan
     """
     explain_query = f"EXPLAIN {query}"
-    result = await execute_query(ctx, explain_query)
+    result = execute_query(ctx, explain_query)
     return result.rows
 
 
 @mcp.tool()
-async def list_tables_in_schema(
+def list_tables_in_schema(
     ctx: Context,
     schema_name: str = Field(description="The name of the schema"),
 ) -> List[Dict[str, Any]]:
@@ -317,7 +315,7 @@ async def list_tables_in_schema(
     """
     if not schema_name or not schema_name.strip():
         error_msg = "Empty schema name provided"
-        await ctx.error(error_msg)
+        ctx.error(error_msg)
         raise ValueError(error_msg)
         
     # Use parameterized query with proper escaping to prevent SQL injection
@@ -337,17 +335,17 @@ async def list_tables_in_schema(
         formatted_query = query.as_string(conn)
         conn.close()
         
-        result = await execute_query(ctx, formatted_query)
+        result = execute_query(ctx, formatted_query)
         return result.rows
     except ValueError as e:
         # Re-raise with more specific error message
         error_msg = f"Failed to list tables in schema '{schema_name}': {str(e)}"
-        await ctx.error(error_msg)
+        ctx.error(error_msg)
         raise ValueError(error_msg)
 
 
 @mcp.tool()
-async def list_schemas(ctx: Context) -> List[Dict[str, Any]]:
+def list_schemas(ctx: Context) -> List[Dict[str, Any]]:
     """
     List all schemas in the database.
     
@@ -387,12 +385,12 @@ async def list_schemas(ctx: Context) -> List[Dict[str, Any]]:
     FROM information_schema.schemata
     ORDER BY schema_name
     """
-    result = await execute_query(ctx, query)
+    result = execute_query(ctx, query)
     return result.rows
 
 
 @mcp.tool()
-async def test_redshift_connection(ctx: Context) -> Dict[str, Any]:
+def test_redshift_connection(ctx: Context) -> Dict[str, Any]:
     """
     Test connection to the Redshift database.
     
@@ -444,7 +442,7 @@ async def test_redshift_connection(ctx: Context) -> Dict[str, Any]:
                 "status": "success",
                 "version": version,
                 "connected": True,
-                "timestamp": asyncio.get_event_loop().time()
+                "timestamp": time.time()
             }
         finally:
             # Always close the connection
@@ -452,7 +450,7 @@ async def test_redshift_connection(ctx: Context) -> Dict[str, Any]:
     
     except Exception as e:
         error_msg = f"Connection test failed: {str(e)}"
-        await ctx.error(error_msg)
+        ctx.error(error_msg)
         return {"status": "error", "message": error_msg, "connected": False}
 
 
