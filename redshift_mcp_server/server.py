@@ -6,7 +6,6 @@ import sys
 import argparse
 import logging
 import time
-from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 
 import psycopg2
@@ -44,9 +43,13 @@ logging.basicConfig(
 )
 
 
-@contextmanager
-def app_lifespan(server: FastMCP) -> dict:
-    """Manage Redshift connection configuration."""
+# Global connection configuration
+redshift_config = None
+
+def initialize_connection_config():
+    """Initialize Redshift connection configuration."""
+    global redshift_config
+    
     # Get connection parameters from environment variables
     host = os.environ.get("REDSHIFT_HOST")
     port = os.environ.get("REDSHIFT_PORT", 5439)  # Default Redshift port
@@ -70,7 +73,7 @@ def app_lifespan(server: FastMCP) -> dict:
         logger.info(f"Connection test successful: {message}")
     
     # Create connection configuration
-    config = RedshiftConnectionConfig(
+    redshift_config = RedshiftConnectionConfig(
         host=host,
         port=int(port),
         database=database,
@@ -79,11 +82,12 @@ def app_lifespan(server: FastMCP) -> dict:
     )
     
     logger.info(f"Redshift connection configuration created for {host}:{port}/{database}")
-    
-    yield {"redshift_config": config}
+    return redshift_config
 
+# Initialize the connection configuration
+initialize_connection_config()
 
-# Create the FastMCP server with lifespan management
+# Create the FastMCP server
 mcp = FastMCP(
     'redshift-mcp-server',
     instructions="""
@@ -108,7 +112,6 @@ mcp = FastMCP(
     - Use `list_tables_in_schema` when: You need to explore tables within a specific schema
     - Use `test_redshift_connection` when: You need to verify connectivity to the database
     """,
-    lifespan=app_lifespan,
     dependencies=[
         'psycopg2',
         'pydantic',
@@ -125,8 +128,8 @@ def execute_query(ctx: Context, query: str) -> QueryResult:
         raise ValueError(error_msg)
         
     try:
-        # Get the connection configuration
-        config = ctx.request_context.lifespan_context["redshift_config"]
+        # Use the global connection configuration
+        config = redshift_config
         
         # Measure execution time
         start_time = time.time()
@@ -327,8 +330,8 @@ def list_tables_in_schema(
     """).format(sql.Literal(schema_name))
     
     try:
-        # Get the connection configuration
-        config = ctx.request_context.lifespan_context["redshift_config"]
+        # Use the global connection configuration
+        config = redshift_config
         
         # Create a new connection just to format the SQL query
         conn = create_connection(config)
@@ -426,8 +429,8 @@ def test_redshift_connection(ctx: Context) -> Dict[str, Any]:
         Dictionary with connection status and version information
     """
     try:
-        # Get connection configuration
-        config = ctx.request_context.lifespan_context["redshift_config"]
+        # Use the global connection configuration
+        config = redshift_config
         
         # Create a new connection for testing
         conn = create_connection(config)
@@ -466,6 +469,10 @@ def main():
 
     # Log startup information
     logger.info('Starting Redshift MCP Server')
+    
+    # Ensure connection config is initialized
+    if redshift_config is None:
+        initialize_connection_config()
 
     # Run server with appropriate transport
     if args.sse:
