@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tuanknguyen-redshift-mcp-server-badge.png)](https://mseep.ai/app/tuanknguyen-redshift-mcp-server)
+
 # Redshift MCP Server
 
 A Model Context Protocol (MCP) server for interacting with Amazon Redshift databases.
